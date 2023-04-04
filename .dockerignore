@@ -1,0 +1,5 @@
+# flyctl launch added from .gitignore
+**/bin
+**/obj
+**/.DS_Store
+fly.toml
