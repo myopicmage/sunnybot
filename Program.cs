@@ -11,9 +11,9 @@ var app = builder.Build();
 var fonts = new FontCollection();
 var textile = new Font(fonts.Add("Textile.ttf"), 30);
 
-var url = app.Configuration["Storage:url"];
-var key = app.Configuration["Storage:key"];
-var secret = app.Configuration["Storage:secret"];
+var url = app.Configuration["STORAGE_URL"];
+var key = app.Configuration["STORAGE_KEY"];
+var secret = app.Configuration["STORAGE_SECRET"];
 
 var s3 = new AmazonS3Client(
   awsAccessKeyId: key,
