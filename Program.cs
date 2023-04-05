@@ -1,9 +1,12 @@
+using System.Text.Json;
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp.Drawing;
 using SixLabors.ImageSharp.Drawing.Processing;
+
+HttpClient client = new HttpClient();
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -51,7 +54,7 @@ else
   buckets.Buckets.ForEach(x => Console.WriteLine($"Name: {x.BucketName}"));
 }
 
-MemoryStream MakeImage(string text)
+async Task<MemoryStream> MakeImage(string text)
 {
   using var img = new Image<Rgba32>(width: 750, height: 500);
   img.Mutate(x => x.Fill(Color.Black));
@@ -72,43 +75,81 @@ MemoryStream MakeImage(string text)
 
   var stream = new MemoryStream();
 
-  img.SaveAsPng(stream);
+  await img.SaveAsPngAsync(stream);
 
   stream.Seek(0, SeekOrigin.Begin);
 
   return stream;
 }
 
+async Task SendResponse(string responseUrl, string imageUrl)
+{
+  var response = new SlackResponse();
+  response.blocks.Add(new()
+  {
+    image_url = imageUrl,
+    alt_text = "sunny card"
+  });
+
+  var r = await client.PostAsJsonAsync(responseUrl, response);
+
+  var c = await r.Content.ReadAsStringAsync();
+}
+
 app.MapPost("/sunny", async (SunnyRequest request) =>
 {
   var text = request.text;
-  var stream = MakeImage(text);
-
-  if (request.upload)
-  {
-    var fileName = $"{System.IO.Path.GetRandomFileName().Split('.')[0]}.png";
-    var uploadStream = new MemoryStream();
-
-    await stream.CopyToAsync(uploadStream);
-
-    stream.Seek(0, SeekOrigin.Begin);
-
-    var response = await s3.PutObjectAsync(request: new()
-    {
-      BucketName = "sunnybot",
-      Key = fileName,
-      InputStream = uploadStream,
-      ContentType = "image/png",
-      CannedACL = S3CannedACL.PublicRead
-    });
-
-    if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
-    {
-      Console.WriteLine("Uploaded file!");
-    }
-  }
+  var stream = await MakeImage(text);
 
   return Results.File(stream, "image/png");
+});
+
+app.MapPost("/slack", async (HttpRequest r) =>
+{
+  var request = new SlackRequest
+  {
+    command = r.Form["command"],
+    text = r.Form["text"],
+    response_url = r.Form["response_url"]
+  };
+
+  if (string.IsNullOrWhiteSpace(request.text))
+  {
+    return Results.Ok("You must supply text");
+  }
+
+  var text = request.text;
+  var stream = await MakeImage(text);
+  var fileName = $"{System.IO.Path.GetRandomFileName().Split('.')[0]}.png";
+  var uploadStream = new MemoryStream();
+
+  await stream.CopyToAsync(uploadStream);
+
+  stream.Seek(0, SeekOrigin.Begin);
+
+  var response = await s3.PutObjectAsync(request: new()
+  {
+    BucketName = "sunnybot",
+    Key = fileName,
+    InputStream = uploadStream,
+    ContentType = "image/png",
+    CannedACL = S3CannedACL.PublicRead
+  });
+
+  if (response.HttpStatusCode != System.Net.HttpStatusCode.OK)
+  {
+    return Results.Ok(new
+    {
+      response_type = "ephemeral",
+      text = "Sorry, failed to generate a title card."
+    });
+  }
+
+  var imgUrl = $"{url}/sunnybot/{fileName}";
+
+  await SendResponse(request.response_url, imgUrl);
+
+  return Results.Ok();
 });
 
 app.Run();
