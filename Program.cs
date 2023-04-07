@@ -87,9 +87,11 @@ async Task<MemoryStream> MakeImage(string text)
   return stream;
 }
 
-async Task SendResponse(string responseUrl, string imageUrl)
+async Task SendResponse(string responseUrl, string imageUrl, string channel)
 {
   var response = new SlackResponse();
+  response.channel = channel;
+  response.text = "Your episode card";
   response.blocks.Add(new()
   {
     image_url = imageUrl,
@@ -115,7 +117,8 @@ app.MapPost("/slack", async (HttpRequest r) =>
   {
     command = r.Form["command"],
     text = r.Form["text"],
-    response_url = r.Form["response_url"]
+    response_url = r.Form["response_url"],
+    channel_id = r.Form["channel_id"]
   };
 
   if (string.IsNullOrWhiteSpace(request.text))
@@ -152,7 +155,7 @@ app.MapPost("/slack", async (HttpRequest r) =>
 
   var imgUrl = $"{url}/sunnybot/{fileName}";
 
-  await SendResponse(request.response_url, imgUrl);
+  await SendResponse(request.response_url, imgUrl, request.channel_id);
 
   return Results.Ok();
 });

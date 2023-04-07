@@ -26,5 +26,7 @@ class SlackImageBlock
 
 class SlackResponse
 {
+  public string channel { get; set; }
+  public string text { get; set; }
   public List<SlackImageBlock> blocks { get; set; } = new();
 }
