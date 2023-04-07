@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -11,12 +10,18 @@ HttpClient client = new HttpClient();
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
+app.UseStaticFiles();
+
 var fonts = new FontCollection();
 var textile = new Font(fonts.Add("Textile.ttf"), 30);
 
 var url = app.Configuration["STORAGE_URL"];
 var key = app.Configuration["STORAGE_KEY"];
 var secret = app.Configuration["STORAGE_SECRET"];
+
+var clientId = app.Configuration["SLACK_CLIENT_ID"];
+var slackSecret = app.Configuration["SLACK_CLIENT_SECRET"];
+var slackSigning = app.Configuration["SLACK_SIGNING_SECRET"];
 
 var s3 = new AmazonS3Client(
   awsAccessKeyId: key,
@@ -151,5 +156,28 @@ app.MapPost("/slack", async (HttpRequest r) =>
 
   return Results.Ok();
 });
+
+async Task Authorize(string code)
+{
+  var content = new Dictionary<string, string>
+  {
+    { "code", code },
+    { "client_id", clientId },
+    { "client_secret", slackSecret }
+  };
+
+  var resp = await client.PostAsync("https://slack.com/api/oauth.v2.access", new FormUrlEncodedContent(content));
+
+  Console.WriteLine(await resp.Content.ReadAsStringAsync());
+}
+
+app.MapGet("/oauth", async (string code) =>
+{
+  await Authorize(code);
+
+  return Results.Ok();
+});
+
+app.MapGet("/", () => Results.Redirect("/index.html"));
 
 app.Run();
