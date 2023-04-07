@@ -89,18 +89,22 @@ async Task<MemoryStream> MakeImage(string text)
 
 async Task SendResponse(string responseUrl, string imageUrl, string channel)
 {
-  var response = new SlackResponse();
-  response.channel = channel;
-  response.text = "Your episode card";
-  response.blocks.Add(new()
+  var response = new SlackResponse
   {
-    image_url = imageUrl,
-    alt_text = "sunny card"
-  });
+    response_type = "in_channel",
+    channel = channel,
+    text = "Your episode card",
+    blocks = new() {
+      new() {
+        image_url = imageUrl,
+        alt_text = "sunny card"
+      }
+    }
+  };
 
   var r = await client.PostAsJsonAsync(responseUrl, response);
 
-  var c = await r.Content.ReadAsStringAsync();
+  Console.WriteLine(await r.Content.ReadAsStringAsync());
 }
 
 app.MapPost("/sunny", async (SunnyRequest request) =>
