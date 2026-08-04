@@ -1,3 +1,4 @@
+using System.Text;
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -24,7 +25,11 @@ var secret = app.Configuration["STORAGE_SECRET"];
 
 var clientId = app.Configuration["SLACK_CLIENT_ID"];
 var slackSecret = app.Configuration["SLACK_CLIENT_SECRET"];
-var slackSigning = app.Configuration["SLACK_SIGNING_SECRET"];
+// Read once, non-null from here on, so /slack cannot silently run unverified.
+// Missing config fails the app at startup rather than at the first request.
+var slackSigning = app.Configuration["SLACK_SIGNING_SECRET"]
+  ?? throw new InvalidOperationException(
+    "SLACK_SIGNING_SECRET is not set. /slack cannot verify requests without it.");
 
 var s3 = new AmazonS3Client(
   awsAccessKeyId: key,
@@ -121,6 +126,18 @@ app.MapPost("/sunny", async (SunnyRequest request) =>
 
 app.MapPost("/slack", async (HttpRequest r) =>
 {
+  // The HMAC covers the raw body, so read it before the form parser consumes it.
+  r.EnableBuffering();
+
+  using var reader = new StreamReader(r.Body, Encoding.UTF8, leaveOpen: true);
+  var rawBody = await reader.ReadToEndAsync();
+  r.Body.Position = 0;
+
+  if (!SlackSignature.IsValid(r.Headers, rawBody, slackSigning, DateTimeOffset.UtcNow))
+  {
+    return Results.Unauthorized();
+  }
+
   var request = new SlackRequest
   {
     command = r.Form["command"],
