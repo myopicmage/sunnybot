@@ -2,8 +2,11 @@ using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using SixLabors.Fonts;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing;
 using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 HttpClient client = new HttpClient();
 
@@ -34,9 +37,10 @@ var s3 = new AmazonS3Client(
   }
 );
 
-var buckets = await s3.ListBucketsAsync();
+// AWS SDK v4 hands back null rather than an empty list when there are no buckets.
+var buckets = (await s3.ListBucketsAsync()).Buckets ?? [];
 
-if (buckets.Buckets.Count == 0)
+if (buckets.Count == 0)
 {
   Console.WriteLine("No buckets found");
 
@@ -56,7 +60,7 @@ if (buckets.Buckets.Count == 0)
 else
 {
   Console.WriteLine("Buckets found!");
-  buckets.Buckets.ForEach(x => Console.WriteLine($"Name: {x.BucketName}"));
+  buckets.ForEach(x => Console.WriteLine($"Name: {x.BucketName}"));
 }
 
 async Task<MemoryStream> MakeImage(string text)
